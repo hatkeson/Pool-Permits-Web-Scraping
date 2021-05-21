@@ -15,7 +15,7 @@ url = "https://mcesearch.monroecounty-fl.gov/search/permits/"
 
 driver.get(url)
 
-# Set dropdown menus and search
+# Set dropdown menus and search - status no longer relevant
 status = Select(driver.find_element_by_id('status'))
 status.select_by_visible_text('OPEN')
 
@@ -47,22 +47,28 @@ for c in range(1, cols + 1):
 
 value = ""
 values_list = []
+page = 1
 
 # scrape first page
-for r in range(1, rows + 1):
-    for c in range(1, cols + 1):
+for c in range(1, cols + 1):
+    col_list = []
+    for r in range(1, rows + 1):
         value = driver.find_element_by_xpath(
             "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr["+str(r)+"]/td["+str(c)+"]").text
-        values_list.append(value)
+        col_list.append(value)
+    values_list.append(col_list)
 
 # get next button
 next_button_link = driver.find_element_by_link_text("Next") # actually click this
 next_button = driver.find_element_by_id("permits-result_next") # use only to see if disabled
 next_enabled = "disabled" not in next_button.get_attribute("class")
 
+# iterate over pages, scrape each, takes approx. 10 min
 while(next_enabled):
     next_button_link.click()
-    time.sleep(random.randint(2, 10))
+    page += 1
+    print("Scraping page " + str(page))
+    time.sleep(random.randint(3, 4))
     next_button_link = driver.find_element_by_link_text("Next")
     next_button = driver.find_element_by_id("permits-result_next") 
     next_enabled = "disabled" not in next_button.get_attribute("class")
@@ -72,16 +78,18 @@ while(next_enabled):
         print("Rows on Last Page: " + str(rows))
 
     #scrape table page
-    for r in range(1, rows + 1):
-        for c in range(1, cols + 1):
+    for c in range(1, cols + 1):
+        col_list = []
+        for r in range(1, rows + 1):
             value = driver.find_element_by_xpath(
                 "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr["+str(r)+"]/td["+str(c)+"]").text
-            values_list.append(value)
+            values_list[c - 1].append(value)
 
 print("Header Length: " + str(len(header_list)))
+print("Header List:")
 print(header_list)
 values_length = len(values_list)
-print("Values Length: " + str(values_length))
+print("Number of rows: " + str(values_length))
 
 # # write to csv
 # with open('pool_permits_Monroe_FL.csv', mode='w', newline = '') as pool_file:
@@ -96,8 +104,17 @@ print("Values Length: " + str(values_length))
 # worksheet = workbook.add_worksheet()
 
 # use pandas to write to xlsx
-# create ndarray from values, use header for column names
-df = pandas.DataFrame(np.ndarray())
+# create dict from values, use header for column names
+
+# chop up values_list into 2D list of row x col
+# initialize dict 
+d = dict(zip(header_list, values_list))
+print("Dictionary: ")
+print(d)
+
+df = pandas.DataFrame(data=d)
+print(df)
+
 
 driver.quit()
 
