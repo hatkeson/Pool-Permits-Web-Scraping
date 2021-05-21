@@ -105,14 +105,15 @@ print("Number of rows: " + str(values_length))
 
 # use pandas to write to xlsx
 # create dict from values, use header for column names
-
-# chop up values_list into 2D list of row x col
-# initialize dict 
 d = dict(zip(header_list, values_list))
 print("Dictionary: ")
 print(d)
 
 df = pandas.DataFrame(data=d)
+
+df['Apply Date']= pandas.to_datetime(df['Apply Date'], format = '%m-%d-%Y', errors = 'coerce')
+df['Permit Issue']= pandas.to_datetime(df['Permit Issue'], format = '%m-%d-%Y', errors = 'coerce')
+
 print(df)
 
 
