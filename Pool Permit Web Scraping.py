@@ -9,6 +9,7 @@ from selenium.webdriver.support.ui import Select
 
 PATH = "C:\\Program Files (x86)\\chromedriver.exe"
 driver = webdriver.Chrome(PATH)
+driver.implicitly_wait(10)
 
 def scrape_monroe():
     """Scrapes pool permits from Monroe County, FL from 1990 until now and returns a dataframe"""
@@ -137,23 +138,59 @@ def scrape_maricopa():
         search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
         search_button.click()
 
-        next_button_link = driver.find_element_by_xpath("/html/body/form/div[3]/div/div[7]/div[1]/table/tbody/tr/td/div[2]/div[3]/div/div/div[2]/div[2]/div[3]/div[1]/div/table/tbody/tr[13]/td/table/tbody/tr/td[13]/a")
-        # Problem: Can't detect Next button
+        time.sleep(random.randint(4, 6))
 
-        print(next_button_link)
+        try:
+            next_button = driver.find_element_by_partial_link_text("Next")
+        except:
+            next_enabled = False
+        else:
+            next_enabled = True
 
-        next_button_link.click()
-
-        # /html/body/form/div[3]/div/div[7]/div[1]/table/tbody/tr/td/div[2]/div[3]/div/div/div[2]/div[2]/div[3]/div[1]/div/table/tbody/tr[13]/td/table/tbody/tr/td[13]/a
-        # <a class="aca_simple_text font11px" href="javascript:__doPostBack('ctl00$PlaceHolderMain$dgvPermitList$gdvPermitList$ctl13$ctl14','');var p = new ProcessLoading();p.showLoading(false);">Next &gt;</a>
+        while(next_enabled):
+            time.sleep(random.randint(3, 4))
+            try:
+                next_button = driver.find_element_by_partial_link_text("Next")
+            except:
+                print("Reached last page.")
+                next_enabled = False
+            else:
+                next_button.click()
+                # Problem: stale element reference exception or click intercepted exception
+                # wait times after clicking next increase as the page numbers get higher
 
 def scrape_kern():
-    url = "https://accela.kerncounty.com/CitizenAccess/Default.aspx"
+    url = "https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home"
     driver.get(url)
+
+    types = ["City Commercial Pool",
+             "City Residential Pool",
+             "Commercial Pool",
+             "Residential Pool"]
+
+    time.sleep(random.randint(3, 5))
+
+    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
+    start_date.send_keys("01011990")
+
+    for i in range(0, len(types)):
+        permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
+        permit_type.select_by_visible_text(types[i])
+
+        time.sleep(random.randint(2, 3))
 
 def scrape_san_mateo():
     url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
     driver.get(url)
+
+    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
+    start_date.send_keys("01011990")
+
+    search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
+    search_button.click()
+
+    download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
+    download_button.click()
 
 def scrape_contra_costa():
     url = "https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
@@ -178,7 +215,6 @@ def scrape_clark():
 def scrape_wake():
     url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
     driver.get(url)
-
 
 scrape_maricopa()
 
