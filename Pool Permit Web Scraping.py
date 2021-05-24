@@ -10,114 +10,177 @@ from selenium.webdriver.support.ui import Select
 PATH = "C:\\Program Files (x86)\\chromedriver.exe"
 driver = webdriver.Chrome(PATH)
 
-### Monroe County, Florida
-url = "https://mcesearch.monroecounty-fl.gov/search/permits/"
+def scrape_monroe():
+    """Scrapes pool permits from Monroe County, FL from 1990 until now and returns a dataframe"""
+    # start timer
+    tic = time.perf_counter()
 
-driver.get(url)
+    # start driver
+    url = "https://mcesearch.monroecounty-fl.gov/search/permits/"
+    driver.get(url)
 
-# Set dropdown menus and search - status no longer relevant
-status = Select(driver.find_element_by_id('status'))
-status.select_by_visible_text('OPEN')
+    # set search parameters - uncomment status to search for only Open permits
+    permit_type = Select(driver.find_element_by_id("permit_type"))
+    permit_type.select_by_visible_text("POOL & SPA")
 
-permit_type = Select(driver.find_element_by_id('permit_type'))
-permit_type.select_by_visible_text('POOL & SPA')
+    # status = Select(driver.find_element_by_id('status'))
+    # status.select_by_visible_text('OPEN')
 
-results_length = Select(driver.find_element_by_name("permits-result_length"))
-results_length.select_by_visible_text("100")
+    results_length = Select(driver.find_element_by_name("permits-result_length"))
+    results_length.select_by_visible_text("100")
 
-time.sleep(random.randint(2, 10))
+    time.sleep(random.randint(2, 10))
 
-# scrape table
-# get rows
-rows = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr"))
-print("Rows: " + str(rows))
+    # get rows and columns of each page
+    rows = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr"))
+    print("Rows per Page: " + str(rows))
 
-# get columns
-cols = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr[1]/td"))
-print("Columns: " + str(cols))
+    cols = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr[1]/td"))
+    print("Columns: " + str(cols))
 
-# scrape table header
-header_list = []
-for c in range(1, cols + 1):
-    header = driver.find_element_by_xpath(
-        "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/thead/tr[1]/th["+str(c)+"]").text
-    header_list.append(header)
+    # scrape table header
+    header_list = []
+    for c in range(1, cols + 1):
+        header = driver.find_element_by_xpath(
+            "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/thead/tr[1]/th["+str(c)+"]").text
+        header_list.append(header)
 
-# scrape table body and click next until last page, sleep after each one
+    # scrape table body and click next until last page, sleep after each one
+    value = ""
+    values_list = []
+    page = 1
 
-value = ""
-values_list = []
-page = 1
-
-# scrape first page
-for c in range(1, cols + 1):
-    col_list = []
-    for r in range(1, rows + 1):
-        value = driver.find_element_by_xpath(
-            "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr["+str(r)+"]/td["+str(c)+"]").text
-        col_list.append(value)
-    values_list.append(col_list)
-
-# get next button
-next_button_link = driver.find_element_by_link_text("Next") # actually click this
-next_button = driver.find_element_by_id("permits-result_next") # use only to see if disabled
-next_enabled = "disabled" not in next_button.get_attribute("class")
-
-# iterate over pages, scrape each, takes approx. 10 min
-while(next_enabled):
-    next_button_link.click()
-    page += 1
-    print("Scraping page " + str(page))
-    time.sleep(random.randint(3, 4))
-    next_button_link = driver.find_element_by_link_text("Next")
-    next_button = driver.find_element_by_id("permits-result_next") 
-    next_enabled = "disabled" not in next_button.get_attribute("class")
-    if(not next_enabled):
-        # recalculate rows
-        rows = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr"))
-        print("Rows on Last Page: " + str(rows))
-
-    #scrape table page
+    # scrape first page
     for c in range(1, cols + 1):
         col_list = []
         for r in range(1, rows + 1):
             value = driver.find_element_by_xpath(
                 "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr["+str(r)+"]/td["+str(c)+"]").text
-            values_list[c - 1].append(value)
+            col_list.append(value)
+        values_list.append(col_list)
 
-print("Header Length: " + str(len(header_list)))
-print("Header List:")
-print(header_list)
-values_length = len(values_list)
-print("Number of rows: " + str(values_length))
+    # get next button
+    next_button_link = driver.find_element_by_link_text("Next") # actually click this
+    next_button = driver.find_element_by_id("permits-result_next") # use only to see if disabled
+    next_enabled = "disabled" not in next_button.get_attribute("class")
 
-# # write to csv
-# with open('pool_permits_Monroe_FL.csv', mode='w', newline = '') as pool_file:
-#     pool_writer = csv.writer(pool_file, delimiter=',', quotechar='"')
+    # iterate over pages, scrape each 
+    # takes approx. 10 min without Status tag
+    while(next_enabled):
+        next_button_link.click()
+        page += 1
+        print("Scraping page " + str(page))
+        time.sleep(random.randint(3, 4))
+        next_button_link = driver.find_element_by_link_text("Next")
+        next_button = driver.find_element_by_id("permits-result_next") 
+        next_enabled = "disabled" not in next_button.get_attribute("class")
+        if(not next_enabled):
+            # recalculate rows
+            rows = len(driver.find_elements_by_xpath("/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr"))
+            print("Rows on Last Page: " + str(rows))
+        #scrape table page
+        for c in range(1, cols + 1):
+            col_list = []
+            for r in range(1, rows + 1):
+                value = driver.find_element_by_xpath(
+                    "/html/body/div[2]/div/div[2]/div/div/div/div[2]/div/table/tbody/tr["+str(r)+"]/td["+str(c)+"]").text
+                values_list[c - 1].append(value)
 
-#     pool_writer.writerow(header_list)
-#     for i in range(0, values_length, cols):
-#         pool_writer.writerow(values_list[i:i+cols])
+    driver.quit()
 
-# write to xlsx (can't modify existing xlsx, so do at end?)
-# workbook = xlsxwriter.Workbook('.xlsx')
-# worksheet = workbook.add_worksheet()
+    print("Header Length: " + str(len(header_list)))
+    print("Header List:")
+    print(header_list)
+    values_length = len(values_list[1])
+    print("Number of rows: " + str(values_length))
 
-# use pandas to write to xlsx
-# create dict from values, use header for column names
-d = dict(zip(header_list, values_list))
-print("Dictionary: ")
-print(d)
+    # create dataframe from dictionary
+    monroe_df = pandas.DataFrame(dict(zip(header_list, values_list)))
 
-df = pandas.DataFrame(data=d)
+    # convert dates from string to Datetime
+    monroe_df['Apply Date']= pandas.to_datetime(monroe_df['Apply Date'], format = '%m-%d-%Y', errors = 'coerce')
+    monroe_df['Permit Issue']= pandas.to_datetime(monroe_df['Permit Issue'], format = '%m-%d-%Y', errors = 'coerce')
 
-df['Apply Date']= pandas.to_datetime(df['Apply Date'], format = '%m-%d-%Y', errors = 'coerce')
-df['Permit Issue']= pandas.to_datetime(df['Permit Issue'], format = '%m-%d-%Y', errors = 'coerce')
+    # end timer
+    toc = time.perf_counter()
 
-print(df)
+    print("Time to scrape: " + str((toc - tic) / 60) + " minutes")
+    return monroe_df
+
+def scrape_maricopa():
+    """Scrapes pool permits from Maricopa, AZ and returns a dataframe"""
+
+    url = "https://accela.maricopa.gov/CitizenAccessMCOSS/Cap/CapHome.aspx?module=PnD&TabName=PnD"
+    driver.get(url)
+
+    # set type and date parameters
+    # we want: 
+    #   Commercial Pools and Spas
+    #   Expedited Models - Pools and Spas
+    #   Expedited Pools and Spas
+    #   Residential Pools and Spas
+
+    types = ["Commercial Pools and Spas", 
+             "Expedited Models - Pools and Spas",
+             "Expedited Pools and Spas",
+             "Residential Pools and Spas"]
+    
+    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
+    start_date.send_keys("01011990")
+
+    for i in range(0, len(types)):
+        permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
+        permit_type.select_by_visible_text(types[i])
+
+        time.sleep(random.randint(2, 3))
+
+        search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
+        search_button.click()
+
+        next_button_link = driver.find_element_by_xpath("/html/body/form/div[3]/div/div[7]/div[1]/table/tbody/tr/td/div[2]/div[3]/div/div/div[2]/div[2]/div[3]/div[1]/div/table/tbody/tr[13]/td/table/tbody/tr/td[13]/a")
+        # Problem: Can't detect Next button
+
+        print(next_button_link)
+
+        next_button_link.click()
+
+        # /html/body/form/div[3]/div/div[7]/div[1]/table/tbody/tr/td/div[2]/div[3]/div/div/div[2]/div[2]/div[3]/div[1]/div/table/tbody/tr[13]/td/table/tbody/tr/td[13]/a
+        # <a class="aca_simple_text font11px" href="javascript:__doPostBack('ctl00$PlaceHolderMain$dgvPermitList$gdvPermitList$ctl13$ctl14','');var p = new ProcessLoading();p.showLoading(false);">Next &gt;</a>
+
+def scrape_kern():
+    url = "https://accela.kerncounty.com/CitizenAccess/Default.aspx"
+    driver.get(url)
+
+def scrape_san_mateo():
+    url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
+    driver.get(url)
+
+def scrape_contra_costa():
+    url = "https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
+    driver.get(url)
+
+def scrape_martin():
+    url = "https://aca-prod.accela.com/MARTINCO/Cap/CapHome.aspx?module=Building&TabName=Building"
+    driver.get(url)
+
+def scrape_charlotte():
+    url = "https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
+    driver.get(url)
+
+def scrape_atlanta():
+    url = "https://aca-prod.accela.com/atlanta_ga/Cap/CapHome.aspx?module=Building&TabName=Building"
+    driver.get(url)
+
+def scrape_clark():
+    url = "https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
+    driver.get(url)
+
+def scrape_wake():
+    url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
+    driver.get(url)
 
 
-driver.quit()
+scrape_maricopa()
 
 ### Maricopa County, Arizona
 # Do we want both residential and commercial?
