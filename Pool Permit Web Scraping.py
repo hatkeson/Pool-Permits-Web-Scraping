@@ -158,6 +158,7 @@ def scrape_maricopa():
                 next_button.click()
                 # Problem: stale element reference exception or click intercepted exception
                 # wait times after clicking next increase as the page numbers get higher
+                # implicit waiting isn't enough, must use explicit
 
 def scrape_kern():
     url = "https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home"
@@ -178,6 +179,17 @@ def scrape_kern():
         permit_type.select_by_visible_text(types[i])
 
         time.sleep(random.randint(2, 3))
+
+        search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
+        search_button.click()
+
+        time.sleep(random.randint(2, 3))
+
+        download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
+        download_button.click()
+
+        # wait until download is finished 
+
 
 def scrape_san_mateo():
     url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
@@ -216,7 +228,7 @@ def scrape_wake():
     url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
     driver.get(url)
 
-scrape_maricopa()
+scrape_kern()
 
 ### Maricopa County, Arizona
 # Do we want both residential and commercial?
