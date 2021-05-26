@@ -1,15 +1,42 @@
 #import csv
 import numpy as np
+import os
+import glob
 import pandas
 import time
 import random
 import selenium
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
+from winreg import *
+
+import logging
+from watchdog.observers import Observer
+from watchdog.events import LoggingEventHandler
+from watchdog.events import FileSystemEventHandler
 
 PATH = "C:\\Program Files (x86)\\chromedriver.exe"
 driver = webdriver.Chrome(PATH)
 driver.implicitly_wait(10)
+
+download_dir = ''
+with OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as key:
+    download_dir = QueryValueEx(key, '{374DE290-123F-4565-9164-39C4925E467B}')[0]
+print("Downloads Folder: " + download_dir)
+
+cwd = os.getcwd()
+print("Current Working Directory: " + cwd)
+
+class MyEventHandler(FileSystemEventHandler):
+    def __init__(self, observer):
+        self.observer = observer
+
+    def on_created(self, event):
+        print("e=", event)
+        if not event.is_directory:
+            print ("file created")
+            self.observer.stop()
+
 
 def scrape_monroe():
     """Scrapes pool permits from Monroe County, FL from 1990 until now and returns a dataframe"""
@@ -188,7 +215,21 @@ def scrape_kern():
         download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
         download_button.click()
 
-        # wait until download is finished 
+        # monitor downloads
+        observer = Observer()
+        event_handler = MyEventHandler(observer)
+        observer.schedule(event_handler, download_dir, recursive=False)
+        observer.start()
+        observer.join()
+
+        # get name of downloaded file
+        list_of_files = glob.glob(download_dir + '\\*.csv') 
+        latest_file = max(list_of_files, key=os.path.getctime)
+        print(latest_file)
+
+        # move files to csv_files/kern
+
+        os.replace(download_dir + '\\' + latest_file, cwd + "\\csv_files\\kern\\" + type[i] + ".csv")
 
 
 def scrape_san_mateo():
