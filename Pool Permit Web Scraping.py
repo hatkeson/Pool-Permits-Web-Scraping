@@ -222,14 +222,15 @@ def scrape_kern():
         observer.start()
         observer.join()
 
+        time.sleep(1)
+
         # get name of downloaded file
         list_of_files = glob.glob(download_dir + '\\*.csv') 
         latest_file = max(list_of_files, key=os.path.getctime)
         print(latest_file)
 
-        # move files to csv_files/kern
-
-        os.replace(download_dir + '\\' + latest_file, cwd + "\\csv_files\\kern\\" + type[i] + ".csv")
+        # move files to csv_files
+        os.renames(latest_file, cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
 
 
 def scrape_san_mateo():
@@ -280,12 +281,12 @@ scrape_kern()
 ### Kern County, California
 # Advanced Search -> Search for Records -> Building
 # Status: Issued, Finaled, Reviewed
-# POOL IS NOT IN RECORD TYPE, MUST SEARCH DESCRIPTION!!!
 # One date given
 # has a download button for csv
 
 ### San Mateo County, California
 # Can't search for record type?
+# POOL IS NOT IN RECORD TYPE, MUST SEARCH DESCRIPTION!!!
 # Has a download button for csv
 
 ### Contra Costa County, California
