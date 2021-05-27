@@ -17,7 +17,6 @@ from watchdog.events import FileSystemEventHandler
 
 PATH = "C:\\Program Files (x86)\\chromedriver.exe"
 driver = webdriver.Chrome(PATH)
-driver.implicitly_wait(10)
 
 download_dir = ''
 with OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders') as key:
@@ -232,10 +231,11 @@ def scrape_kern():
         # move files to csv_files
         os.renames(latest_file, cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
 
-
 def scrape_san_mateo():
     url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
     driver.get(url)
+
+    # can't search by permit types
 
     start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
     start_date.send_keys("01011990")
@@ -250,30 +250,64 @@ def scrape_contra_costa():
     url = "https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
 
+    types = ["Building/Commercial/CP/Pool",
+             "Building/Project/Pool/NA",
+             "Building/Residential/P/Pool",
+             "Building/Residential/SP/Spa"]
+
 def scrape_martin():
     url = "https://aca-prod.accela.com/MARTINCO/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
+
+    types = ["Commercial Jacuzzi/Spa",
+             "Commercial Pool Deck",
+             "Commercial Swimming Pool With Deck",
+             "Residential Above Ground Pool",
+             "Residential Jacuzzi/Spa",
+             "Residential Pool Barrier",
+             "Residential Pool Deck",
+             "Residential Pool Enclosure",
+             "Residential Pool Enclosure W/Slab",
+             "Residential Swimming Pool No Deck",
+             "Residential Swimming Pool With Deck"]
 
 def scrape_charlotte():
     url = "https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
 
+    types = ["Commercial Pool Heat Pump",
+             "Commercial Swimming Pool",
+             "Res Pool Heat Pump",
+             "Residential Pool Solar System",
+             "Residential Swimming Pool"]    
+
 def scrape_atlanta():
     url = "https://aca-prod.accela.com/atlanta_ga/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
+
+    types = ["Commercial Pool",
+             "Residential Pool"]
 
 def scrape_clark():
     url = "https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
 
+    types = ["Commercial Pool",
+             "Commercial Spa",
+             "Residential Pools Spas Water Features"]
+
 def scrape_wake():
     url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
     driver.get(url)
 
+    # must select Permit and Advanced to get to type
+    types = ["Commercial Pool, Spa or Hot Tub",
+             "Public Pool Permit",
+             "Residential Pool, Spa & Hot Tub"]
+
 scrape_kern()
 
 ### Maricopa County, Arizona
-# Do we want both residential and commercial?
 # Not possible to search by status, but shows in results. Issued, Reissued, Final
 # Application or Issue date is given, Expiration date looks sparse
 # no download button
@@ -290,7 +324,7 @@ scrape_kern()
 # Has a download button for csv
 
 ### Contra Costa County, California
-# 
+# has downloadable csv
 
 ### Martin County, Florida
 # Has permit types for pool deck, pool barrier, pool enclosure
@@ -314,5 +348,8 @@ scrape_kern()
 
 # Must only scrape 3 more websites, can use csv for others
 
-# Kern, San Mateo, Martin, Charlotte, Atlanta: 
+# Kern, San Mateo, Martin, Charlotte, Contra Costa, Atlanta: 
 # use selenium to get results and click download
+
+# Monroe, Maricopa, Clark, Wake
+# no download, must scrape each page
