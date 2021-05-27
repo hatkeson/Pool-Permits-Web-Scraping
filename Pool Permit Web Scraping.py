@@ -5,10 +5,15 @@ import glob
 import pandas
 import time
 import random
+from pandas.core.reshape.concat import concat
 import selenium
 from selenium import webdriver
 from selenium.webdriver.support.ui import Select
 from winreg import *
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 import logging
 from watchdog.observers import Observer
@@ -209,9 +214,12 @@ def scrape_kern():
         search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
         search_button.click()
 
-        time.sleep(random.randint(2, 3))
+        time.sleep(5)
 
-        download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
+        download_button = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")))
+
+        #download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
         download_button.click()
 
         # monitor downloads
@@ -229,7 +237,17 @@ def scrape_kern():
         print(latest_file)
 
         # move files to csv_files
-        os.renames(latest_file, cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
+        os.replace(latest_file, cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
+    
+    driver.quit()
+
+    # take csv files, join them into a single dataframe
+    frames = []
+    for i in range(0, len(types)):
+        c = pandas.read_csv(cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
+        frames.append(c)
+    df = concat(frames)
+    return df
 
 def scrape_san_mateo():
     url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
@@ -305,7 +323,77 @@ def scrape_wake():
              "Public Pool Permit",
              "Residential Pool, Spa & Hot Tub"]
 
-scrape_kern()
+def scrape_csv():
+    # kern, charlotte
+    urls = ["https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home",
+"https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"]    
+    names = ["kern", "charlotte"]
+
+    types = [["City Commercial Pool",
+              "City Residential Pool",
+              "Commercial Pool",
+              "Residential Pool"],
+             ["Commercial Pool Heat Pump",
+              "Commercial Swimming Pool",
+              "Res Pool Heat Pump",
+              "Residential Pool Solar System",
+              "Residential Swimming Pool"]]
+    site_frames = []
+    for i in range(0, len(urls)):
+
+        driver.get(urls[i])
+
+        time.sleep(random.randint(3, 5))
+
+        start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
+        start_date.send_keys("01011990")
+
+        for j in range(0, len(types[i])):
+            permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
+            permit_type.select_by_visible_text(types[i][j])
+
+            time.sleep(random.randint(2, 3))
+
+            search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
+            search_button.click()
+
+            time.sleep(5)
+
+            download_button = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")))
+
+            download_button.click()
+
+            # monitor downloads
+            observer = Observer()
+            event_handler = MyEventHandler(observer)
+            observer.schedule(event_handler, download_dir, recursive=False)
+            observer.start()
+            observer.join()
+
+            time.sleep(1)
+
+            # get name of downloaded file
+            list_of_files = glob.glob(download_dir + '\\*.csv') 
+            latest_file = max(list_of_files, key=os.path.getctime)
+            print(latest_file)
+
+            # move files to csv_files
+            os.replace(latest_file, cwd + '\\data\\csv_files\\'+ names[i] + '\\' + types[i][j] + ".csv")
+        
+        # take csv files, join them into a single dataframe
+        frames = []
+        for j in range(0, len(types[i])):
+            c = pandas.read_csv(cwd + '\\data\\csv_files\\' + names[i] + '\\' + types[i][j] + ".csv")
+            frames.append(c)
+        df = concat(frames)
+        site_frames.append(df)
+    multiple_site_df = concat(site_frames)
+    return multiple_site_df
+
+d = scrape_csv()
+
+print(d)
 
 ### Maricopa County, Arizona
 # Not possible to search by status, but shows in results. Issued, Reissued, Final
