@@ -324,10 +324,15 @@ def scrape_wake():
              "Residential Pool, Spa & Hot Tub"]
 
 def scrape_csv():
-    # kern, charlotte
+    # kern, charlotte, contra_costa, atlanta, martin, san_mateo
     urls = ["https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home",
-"https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"]    
-    names = ["kern", "charlotte"]
+            "https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building",
+            "https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building",
+            "https://aca-prod.accela.com/atlanta_ga/Cap/CapHome.aspx?module=Building&TabName=Building",
+            "https://aca-prod.accela.com/MARTINCO/Cap/CapHome.aspx?module=Building&TabName=Building",
+            "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"]    
+    counties = ["kern", "charlotte", "contra_costa", "atlanta", "martin", "san_mateo"]
+    states = ["CA", "FL", "CA", "GA", "FL", "CA"]
 
     types = [["City Commercial Pool",
               "City Residential Pool",
@@ -337,7 +342,25 @@ def scrape_csv():
               "Commercial Swimming Pool",
               "Res Pool Heat Pump",
               "Residential Pool Solar System",
-              "Residential Swimming Pool"]]
+              "Residential Swimming Pool"],
+             ["Building/Commercial/CP/Pool",
+              "Building/Project/Pool/NA",
+              "Building/Residential/P/Pool",
+              "Building/Residential/SP/Spa"],
+             ["Commercial Pool",
+              "Residential Pool"],
+             ["Commercial Jacuzzi/Spa",
+              "Commercial Pool Deck",
+              "Commercial Swimming Pool With Deck",
+              "Residential Above Ground Pool",
+              "Residential Jacuzzi/Spa",
+              "Residential Pool Barrier",
+              "Residential Pool Deck",
+              "Residential Pool Enclosure",
+              "Residential Pool Enclosure W/Slab",
+              "Residential Swimming Pool No Deck",
+              "Residential Swimming Pool With Deck"],
+              ['San Mateo Dummy Value']]
     site_frames = []
     for i in range(0, len(urls)):
 
@@ -349,8 +372,10 @@ def scrape_csv():
         start_date.send_keys("01011990")
 
         for j in range(0, len(types[i])):
-            permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
-            permit_type.select_by_visible_text(types[i][j])
+
+            if (counties[i] != 'san_mateo'): # can't search san mateo by Permit Type, must filter manually (by Description, Type = 'Building Permit')
+                permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
+                permit_type.select_by_visible_text(types[i][j])
 
             time.sleep(random.randint(2, 3))
 
@@ -379,14 +404,42 @@ def scrape_csv():
             print(latest_file)
 
             # move files to csv_files
-            os.replace(latest_file, cwd + '\\data\\csv_files\\'+ names[i] + '\\' + types[i][j] + ".csv")
-        
+            # remove illegal characters in types names
+            if (counties[i] == 'san_mateo'):
+                os.replace(latest_file, cwd + '\\data\\csv_files\\'+ counties[i] + '\\san_mateo.csv')
+            else:
+                if '/' in types[i][j]:
+                    types[i][j] = types[i][j].replace('/', ' ')
+                os.replace(latest_file, cwd + '\\data\\csv_files\\'+ counties[i] + '\\' + types[i][j] + ".csv")
+            
         # take csv files, join them into a single dataframe
-        frames = []
-        for j in range(0, len(types[i])):
-            c = pandas.read_csv(cwd + '\\data\\csv_files\\' + names[i] + '\\' + types[i][j] + ".csv")
+        if (counties[i] == 'san_mateo'):
+            c = pandas.read_csv(cwd + '\\data\\csv_files\\' + counties[i] + '\\san_mateo.csv')
             frames.append(c)
-        df = concat(frames)
+        else:
+            frames = []
+            for j in range(0, len(types[i])):
+                c = pandas.read_csv(cwd + '\\data\\csv_files\\' + counties[i] + '\\' + types[i][j] + ".csv")
+                frames.append(c)
+            df = concat(frames)
+
+        # tag with county and state
+        df['County'] = counties[i]
+        df['State'] = states[i]
+
+        if 'Record Number' in df.columns:
+            df.rename({'Record Number' : 'Permit Number', 'Record Type' : 'Permit Type'}, 
+                      axis = "columns",
+                      inplace = True)
+        if 'Application Date' in df.columns:
+            df.rename({'Application Date' : 'Date'}, axis = "columns", inplace = True)
+
+        # TODO: manually filter san_mateo by Permit Type = "Building Permit" 
+        # and description contains "pool" case-insensitive
+        if (counties[i] == 'san_mateo'):
+            df = df[('pool' in df['Description'].str.contains('pool', case = False)) & 
+                    (df['Permit Type'] == 'Building Permit')]
+
         site_frames.append(df)
     multiple_site_df = concat(site_frames)
     return multiple_site_df
@@ -394,6 +447,8 @@ def scrape_csv():
 d = scrape_csv()
 
 print(d)
+
+d.to_csv(path_or_buf = cwd + '\\data\\1.csv')
 
 ### Maricopa County, Arizona
 # Not possible to search by status, but shows in results. Issued, Reissued, Final
