@@ -191,121 +191,6 @@ def scrape_maricopa():
                 # wait times after clicking next increase as the page numbers get higher
                 # implicit waiting isn't enough, must use explicit
 
-def scrape_kern():
-    url = "https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home"
-    driver.get(url)
-
-    types = ["City Commercial Pool",
-             "City Residential Pool",
-             "Commercial Pool",
-             "Residential Pool"]
-
-    time.sleep(random.randint(3, 5))
-
-    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
-    start_date.send_keys("01011990")
-
-    for i in range(0, len(types)):
-        permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
-        permit_type.select_by_visible_text(types[i])
-
-        time.sleep(random.randint(2, 3))
-
-        search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
-        search_button.click()
-
-        time.sleep(5)
-
-        download_button = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")))
-
-        #download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
-        download_button.click()
-
-        # monitor downloads
-        observer = Observer()
-        event_handler = MyEventHandler(observer)
-        observer.schedule(event_handler, download_dir, recursive=False)
-        observer.start()
-        observer.join()
-
-        time.sleep(1)
-
-        # get name of downloaded file
-        list_of_files = glob.glob(download_dir + '\\*.csv') 
-        latest_file = max(list_of_files, key=os.path.getctime)
-        print(latest_file)
-
-        # move files to csv_files
-        os.replace(latest_file, cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
-    
-    driver.quit()
-
-    # take csv files, join them into a single dataframe
-    frames = []
-    for i in range(0, len(types)):
-        c = pandas.read_csv(cwd + '\\data\\csv_files\\kern\\' + types[i] + ".csv")
-        frames.append(c)
-    df = concat(frames)
-    return df
-
-def scrape_san_mateo():
-    url = "https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home"
-    driver.get(url)
-
-    # can't search by permit types
-
-    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
-    start_date.send_keys("01011990")
-
-    search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
-    search_button.click()
-
-    download_button = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_gdvPermitListtop4btnExport")
-    download_button.click()
-
-def scrape_contra_costa():
-    url = "https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
-    driver.get(url)
-
-    types = ["Building/Commercial/CP/Pool",
-             "Building/Project/Pool/NA",
-             "Building/Residential/P/Pool",
-             "Building/Residential/SP/Spa"]
-
-def scrape_martin():
-    url = "https://aca-prod.accela.com/MARTINCO/Cap/CapHome.aspx?module=Building&TabName=Building"
-    driver.get(url)
-
-    types = ["Commercial Jacuzzi/Spa",
-             "Commercial Pool Deck",
-             "Commercial Swimming Pool With Deck",
-             "Residential Above Ground Pool",
-             "Residential Jacuzzi/Spa",
-             "Residential Pool Barrier",
-             "Residential Pool Deck",
-             "Residential Pool Enclosure",
-             "Residential Pool Enclosure W/Slab",
-             "Residential Swimming Pool No Deck",
-             "Residential Swimming Pool With Deck"]
-
-def scrape_charlotte():
-    url = "https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
-    driver.get(url)
-
-    types = ["Commercial Pool Heat Pump",
-             "Commercial Swimming Pool",
-             "Res Pool Heat Pump",
-             "Residential Pool Solar System",
-             "Residential Swimming Pool"]    
-
-def scrape_atlanta():
-    url = "https://aca-prod.accela.com/atlanta_ga/Cap/CapHome.aspx?module=Building&TabName=Building"
-    driver.get(url)
-
-    types = ["Commercial Pool",
-             "Residential Pool"]
-
 def scrape_clark():
     url = "https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
@@ -436,6 +321,7 @@ def scrape_csv():
 
         # TODO: manually filter san_mateo by Permit Type = "Building Permit" 
         # and description contains "pool" case-insensitive
+        # Problem: no apparent effect
         if (counties[i] == 'san_mateo'):
             df = df[('pool' in df['Description'].str.contains('pool', case = False)) & 
                     (df['Permit Type'] == 'Building Permit')]
