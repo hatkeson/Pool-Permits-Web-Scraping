@@ -1,8 +1,7 @@
 # Pool-Permit-Web-Scraping
 Web Scraping Project
 
-This program takes the table from https://mcesearch.monroecounty-fl.gov/search/permits/ and scrapes it for all open pool and spa permits in Monroe County, Florida.
-It first uses Selenium with Python to scrape and create a csv file, then uses an R script to convert the csv into a Microsoft Excel file. 
+This program takes scrapes various county websites for all pool and spa permits, exporting it to a single excel file
 
 TODO:
 Add the following websites:
