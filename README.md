@@ -11,46 +11,18 @@ Arizona:
 
 ·         https://accela.maricopa.gov/CitizenAccessMCOSS/Cap/CapHome.aspx?module=PnD&TabName=PnD
 
- 
-
- 
-
-California:
-
-·         https://accela.kerncounty.com/CitizenAccess/Default.aspx
-
-·         https://aca-prod.accela.com/SMCGOV/Cap/CapHome.aspx?module=Building&TabName=Home
-
-·         https://epermits.cccounty.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building
-
- 
-
- 
-
-Florida
-
-·         https://aca-prod.accela.com/MARTINCO/Cap/CapHome.aspx?module=Building&TabName=Building
-
-·         https://secureapps.charlottecountyfl.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building
-
- 
-
-Atlanta, Georgia:
-
-·         https://aca-prod.accela.com/atlanta_ga/Cap/CapHome.aspx?module=Building&TabName=Building
-
- 
-
 Nevada
 
 ·         https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building
-
- 
 
 North Carolina
 
 ·         https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search
 
- 
+BUGS:
 
+Martin County's information is tagged with San Mateo
+Maricopa: next button becomes stale because wait times between pages increase with page number
+San Mateo: download sometimes fails, use explicit wait
+San Mateo: check if filtering actually works
  
