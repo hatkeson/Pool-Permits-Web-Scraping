@@ -1,5 +1,6 @@
 #import csv
 import numpy as np
+from datetime import timedelta
 import os
 import glob
 import pandas
@@ -40,7 +41,6 @@ class MyEventHandler(FileSystemEventHandler):
         if not event.is_directory:
             print ("file created")
             self.observer.stop()
-
 
 def scrape_monroe():
     """Scrapes pool permits from Monroe County, FL from 1990 until now and returns a dataframe"""
@@ -134,9 +134,9 @@ def scrape_monroe():
     monroe_df['Permit Issue']= pandas.to_datetime(monroe_df['Permit Issue'], format = '%m-%d-%Y', errors = 'coerce')
 
     # end timer
-    toc = time.perf_counter()
+    toc = timedelta(seconds=time.perf_counter() - tic)
+    print("Scraped monroe county in: ", toc)
 
-    print("Time to scrape: " + str((toc - tic) / 60) + " minutes")
     return monroe_df
 
 def scrape_maricopa():
@@ -248,6 +248,8 @@ def scrape_csv():
               ['San Mateo Dummy Value']]
     site_frames = []
     for i in range(0, len(urls)):
+        print("Scraping " + counties[i] + " county...")
+        tic = time.perf_counter()
 
         driver.get(urls[i])
 
@@ -286,6 +288,7 @@ def scrape_csv():
             # get name of downloaded file
             list_of_files = glob.glob(download_dir + '\\*.csv') 
             latest_file = max(list_of_files, key=os.path.getctime)
+            # Problem: fails on San Mateo, need a longer sleep
             print(latest_file)
 
             # move files to csv_files
@@ -311,6 +314,7 @@ def scrape_csv():
         # tag with county and state
         df['County'] = counties[i]
         df['State'] = states[i]
+        # Problem: Martin's values tagged with San Mateo name
 
         if 'Record Number' in df.columns:
             df.rename({'Record Number' : 'Permit Number', 'Record Type' : 'Permit Type'}, 
@@ -327,6 +331,10 @@ def scrape_csv():
                     (df['Permit Type'] == 'Building Permit')]
 
         site_frames.append(df)
+
+        toc = timedelta(seconds=time.perf_counter() - tic)
+        print("Scraped " + counties[i] + " county in: ", toc)
+
     multiple_site_df = concat(site_frames)
     return multiple_site_df
 
