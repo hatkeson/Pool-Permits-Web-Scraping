@@ -20,7 +20,6 @@ North Carolina
 
 BUGS:
 
-Martin County's information is tagged with San Mateo
 Maricopa: next button becomes stale because wait times between pages increase with page number
 San Mateo: download sometimes fails, use explicit wait
 San Mateo: check if filtering actually works

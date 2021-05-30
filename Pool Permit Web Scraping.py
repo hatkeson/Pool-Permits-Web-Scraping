@@ -331,7 +331,7 @@ def scrape_csv():
         if 'Application Date' in df.columns:
             df.rename({'Application Date' : 'Date'}, axis = "columns", inplace = True)
 
-        # TODO: manually filter san_mateo by Permit Type = "Building Permit" 
+        # TODO: manually filter san_mateo by Permit Type = "Building Permit"
         # and description contains "pool" case-insensitive
         # Problem: no apparent effect
         if (counties[i] == 'san_mateo'):
