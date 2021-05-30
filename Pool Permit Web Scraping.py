@@ -449,7 +449,7 @@ def scrape_wake():
         # add permit type, county, state
         type_df['Permit Type'] = types[i]
         type_df['County'] = 'wake'
-        type_df['State'] = 'FL'
+        type_df['State'] = 'NC'
 
         frames.append(type_df)
         # weird: there seems to be more rows in the table than the website reports
