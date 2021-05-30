@@ -137,6 +137,9 @@ def scrape_monroe():
     toc = timedelta(seconds=time.perf_counter() - tic)
     print("Scraped monroe county in: ", toc)
 
+    monroe_df['County'] = 'monroe'
+    monroe_df['State'] = 'FL'
+
     return monroe_df
 
 def scrape_maricopa():
@@ -208,6 +211,10 @@ def scrape_wake():
              "Public Pool Permit",
              "Residential Pool, Spa & Hot Tub"]
 
+    type_select = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.ID, "SearchModule")))
+
+
 def scrape_csv():
     # kern, charlotte, contra_costa, atlanta, martin, san_mateo
     urls = ["https://accela.co.kern.ca.us/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Home",
@@ -245,7 +252,7 @@ def scrape_csv():
               "Residential Pool Enclosure W/Slab",
               "Residential Swimming Pool No Deck",
               "Residential Swimming Pool With Deck"],
-              ['San Mateo Dummy Value']]
+             ["San Mateo Dummy Value"]]
     site_frames = []
     for i in range(0, len(urls)):
         print("Scraping " + counties[i] + " county...")
@@ -283,7 +290,10 @@ def scrape_csv():
             observer.start()
             observer.join()
 
-            time.sleep(1)
+            if (counties[i] == "san_mateo"):
+                time.sleep(5)
+            else:
+                time.sleep(1)
 
             # get name of downloaded file
             list_of_files = glob.glob(download_dir + '\\*.csv') 
@@ -302,8 +312,7 @@ def scrape_csv():
             
         # take csv files, join them into a single dataframe
         if (counties[i] == 'san_mateo'):
-            c = pandas.read_csv(cwd + '\\data\\csv_files\\' + counties[i] + '\\san_mateo.csv')
-            frames.append(c)
+            df = pandas.read_csv(cwd + '\\data\\csv_files\\' + counties[i] + '\\san_mateo.csv')
         else:
             frames = []
             for j in range(0, len(types[i])):
@@ -314,7 +323,6 @@ def scrape_csv():
         # tag with county and state
         df['County'] = counties[i]
         df['State'] = states[i]
-        # Problem: Martin's values tagged with San Mateo name
 
         if 'Record Number' in df.columns:
             df.rename({'Record Number' : 'Permit Number', 'Record Type' : 'Permit Type'}, 
