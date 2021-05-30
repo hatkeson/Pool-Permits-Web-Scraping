@@ -81,7 +81,7 @@ def scrape_csv():
               "Residential Swimming Pool With Deck"],
              ["San Mateo Dummy Value"]]
     site_frames = []
-    for i in range(0, len(urls)):
+    for i in range(0, len(counties)):
         print("Scraping " + counties[i] + " county...")
         tic = time.perf_counter()
 
@@ -162,8 +162,10 @@ def scrape_csv():
         # and description contains "pool" case-insensitive
         # Problem: no entries left after filtering
         if (counties[i] == 'san_mateo'):
-            df = df[('pool' in df['Description'].str.contains('pool', case = False)) & 
-                    (df['Permit Type'] == 'Building Permit')]
+            df = df[df['Permit Type'] == 'Building Permit']
+            df = df[df['Description'].str.contains('pool', regex = False, case = False, na = False)]
+            print("Filtered San Mateo Dataframe:")
+            print(df)
 
         site_frames.append(df)
 
@@ -458,7 +460,7 @@ def scrape_wake():
     return wake_df
 
         
-d = scrape_wake()
+d = scrape_csv()
 
 print(d)
 
