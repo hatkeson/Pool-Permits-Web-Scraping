@@ -14,9 +14,6 @@ Nevada
 
 ·         https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building
 
-North Carolina
-
-·         https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search
 
 BUGS:
 
