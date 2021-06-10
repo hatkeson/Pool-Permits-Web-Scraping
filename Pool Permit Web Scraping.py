@@ -1,4 +1,3 @@
-#import csv
 from typing import Text
 import numpy as np
 from datetime import timedelta
@@ -16,6 +15,11 @@ from winreg import *
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import TimeoutException
+
 
 import logging
 from watchdog.observers import Observer
@@ -231,6 +235,7 @@ def scrape_monroe():
             col_list.append(value)
         values_list.append(col_list)
 
+
     # get next button
     next_button_link = driver.find_element_by_link_text("Next") # actually click this
     next_button = driver.find_element_by_id("permits-result_next") # use only to see if disabled
@@ -286,63 +291,225 @@ def scrape_monroe():
 
 def scrape_maricopa():
     """Scrapes pool permits from Maricopa, AZ and returns a dataframe"""
-
+    # estimated 17,000 entries in residential pool category, 
+    # must iterate over 1,700 pages
+    # 85 pages or 850 entries per year
+    # at page 600, loading time is 30 seconds, assuming a linear increase of +0.05 sec/page
+    # last page should take 850 seconds or 14 minutes
     url = "https://accela.maricopa.gov/CitizenAccessMCOSS/Cap/CapHome.aspx?module=PnD&TabName=PnD"
     driver.get(url)
 
-    # set type and date parameters
-    # we want: 
-    #   Commercial Pools and Spas
-    #   Expedited Models - Pools and Spas
-    #   Expedited Pools and Spas
-    #   Residential Pools and Spas
-
     types = ["Commercial Pools and Spas", 
              "Expedited Models - Pools and Spas",
-             "Expedited Pools and Spas",
-             "Residential Pools and Spas"]
+             "Expedited Pools and Spas"]
+             # "Residential Pools and Spas"]
     
     start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
     start_date.send_keys("01011990")
 
+    frames = []
+
     for i in range(0, len(types)):
+        time.sleep(2)
+
+        print("Scraping " + types[i])
         permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
         permit_type.select_by_visible_text(types[i])
 
-        time.sleep(random.randint(2, 3))
+        time.sleep(2)
 
-        search_button = driver.find_element_by_id("ctl00_PlaceHolderMain_btnNewSearch")
+        search_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_btnNewSearch")))
         search_button.click()
 
         time.sleep(random.randint(4, 6))
 
-        try:
-            next_button = driver.find_element_by_partial_link_text("Next")
-        except:
-            next_enabled = False
+        next_button = driver.find_element_by_partial_link_text("Next")
+        next_enabled = next_button.is_enabled()
+        if not next_enabled:
+            print("Reached last page.")
+            # calculate rows
+            count_str = driver.find_element_by_xpath('//*[@id="ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList"]/tbody/tr[1]/td/div/table/tbody/tr/td/span').text
+            res = [int(k) for k in count_str.split() if k.isdigit()]
+            count = res[1] - res[0]
+            print("Elements on Page: " + str(count))
         else:
-            next_enabled = True
+            count = 10
+        
+        # scrape first page
+        date_list = []
+        number_list = []
+        status_list = []
+        for r in range(2, count + 2):
+            date_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblUpdatedTime').text
+            try:
+                number_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblPermitNumber1').text
+                status_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblStatus').text
+            except NoSuchElementException:
+                number_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblPermitNumber1').text
+                status_value = np.NaN
+
+            number_list.append(number_value)          
+            date_list.append(date_value)
+            status_list.append(status_value)
 
         while(next_enabled):
-            time.sleep(random.randint(3, 4))
+            next_button.click()
+            # get loading message, wait for it to go away
+            loading = driver.find_element_by_id("divGlobalLoading")
+            loading_style = loading.get_attribute("style")
+            while ("block" in loading_style):
+                time.sleep(1)
+                loading = driver.find_element_by_id("divGlobalLoading")
+                loading_style = loading.get_attribute("style")
             try:
                 next_button = driver.find_element_by_partial_link_text("Next")
-            except:
+            except NoSuchElementException:
                 print("Reached last page.")
+                count_str = driver.find_element_by_xpath('//*[@id="ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList"]/tbody/tr[1]/td/div/table/tbody/tr/td/span').text
+                print(count_str)
+                count_str = count_str.replace("-", " ")
+                res = [int(k) for k in count_str.split() if k.isdigit()]
+                print(res)
+                count = res[1] - res[0] + 1
+                print("Elements on Page: " + str(count))
                 next_enabled = False
-            else:
-                next_button.click()
-                # Problem: stale element reference exception or click intercepted exception
-                # wait times after clicking next increase as the page numbers get higher
-                # implicit waiting isn't enough, must use explicit
+            # scrape page    
+            for r in range(2, count + 2):
+                print("Scraping row " + str(r))
+                date_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblUpdatedTime").text 
+                try:
+                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber1").text
+                    status_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblStatus").text
+                except NoSuchElementException:
+                    # the ID starts with 21TMP, no status
+                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber").text
+                    status_value = np.NaN
+
+                number_list.append(number_value)          
+                date_list.append(date_value)
+                status_list.append(status_value)
+
+        header_list = ["Date", "Permit Number" "Status"]
+        value_list = [date_list, number_list, status_list]
+        type_df = pandas.DataFrame(dict(zip(header_list, value_list)))
+
+        # add permit type, county, state
+        type_df['Permit Type'] = types[i]
+        type_df['County'] = 'maricopa'
+        type_df['State'] = 'AZ'
+        frames.append(type_df)
+
+    maricopa_df = pandas.concat(frames)
+    maricopa_df['Date']= pandas.to_datetime(maricopa_df['Date'], format = '%m/%d/%Y', errors = 'coerce')
+
+    return maricopa_df
 
 def scrape_clark():
     url = "https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
-
-    types = ["Commercial Pool",
+    # 34,000 estimated results in Residential category
+    types = ["Residential Pools Spas Water Features",
              "Commercial Spa",
-             "Residential Pools Spas Water Features"]
+             "Commercial Pool"]
+
+    start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
+    start_date.send_keys("01011990")
+
+    frames = []
+
+    for i in range(0, len(types)):
+        time.sleep(2)
+
+        print("Scraping " + types[i])
+        permit_type = Select(driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_ddlGSPermitType"))
+        permit_type.select_by_visible_text(types[i])
+
+        # get loading message, wait for it to go away
+        loading = driver.find_element_by_id("divGlobalLoading")
+        loading_style = loading.get_attribute("style")
+        while ("block" in loading_style):
+            time.sleep(1)
+            loading = driver.find_element_by_id("divGlobalLoading")
+            loading_style = loading.get_attribute("style")
+
+        search_button = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_btnNewSearch")))
+        search_button.click()
+
+        time.sleep(random.randint(4, 6))
+
+        
+        next_button = driver.find_element_by_partial_link_text("Next")
+        next_enabled = next_button.is_enabled()
+        if not next_enabled:
+            next_enabled = False
+            print("Reached last page.")
+            # calculate rows
+            count_str = driver.find_element_by_xpath('//*[@id="ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList"]/tbody/tr[1]/td/div/table/tbody/tr/td[1]/span').text
+            count_str = count_str.replace("-", " ")
+            res = [int(k) for k in count_str.split() if k.isdigit()]
+            count = res[1] - res[0]
+            print("Elements on Page: " + str(count))
+        else:
+            count = 10
+
+        number_list = []
+        date_list = []
+        status_list = []
+
+        while(next_enabled):
+            next_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Next")))
+            next_button.click()
+            # get loading message, wait for it to go away
+            loading = driver.find_element_by_id("divGlobalLoading")
+            loading_style = loading.get_attribute("style")
+            while ("block" in loading_style):
+                time.sleep(1)
+                loading = driver.find_element_by_id("divGlobalLoading")
+                loading_style = loading.get_attribute("style")
+            try:
+                next_button = driver.find_element_by_partial_link_text("Next")
+            except NoSuchElementException:
+                next_enabled = False
+                print("Reached last page.")
+                # calculate rows
+                count_str = driver.find_element_by_xpath('//*[@id="ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList"]/tbody/tr[1]/td/div/table/tbody/tr/td[1]/span').text
+                count_str = count_str.replace("-", " ")
+                res = [int(k) for k in count_str.split() if k.isdigit()]
+                count = res[1] - res[0] + 1
+                print("Elements on Page: " + str(count))
+            # scrape page    
+            for r in range(2, count + 2):
+                print("Scraping row " + str(r))
+                date_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblUpdatedTime").text 
+                try:
+                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber1").text
+                    status_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblStatus").text
+                except NoSuchElementException:
+                    # the ID starts with 21TMP, no status
+                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber").text
+                    status_value = np.NaN
+                
+                number_list.append(number_value)          
+                date_list.append(date_value)
+                status_list.append(status_value)
+
+        header_list = ["Date", "Permit Number" "Status"]
+        value_list = [date_list, number_list, status_list]
+        type_df = pandas.DataFrame(dict(zip(header_list, value_list)))
+
+        # add permit type, county, state
+        type_df['Permit Type'] = types[i]
+        type_df['County'] = 'clark'
+        type_df['State'] = 'NV'
+        frames.append(type_df)
+
+    clark_df = pandas.concat(frames)
+    clark_df['Date']= pandas.to_datetime(clark_df['Date'], format = '%m/%d/%Y', errors = 'coerce')
+    return clark_df
+            
 
 def scrape_wake():
     url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
@@ -416,14 +583,7 @@ def scrape_wake():
                 EC.presence_of_element_located((By.XPATH, "//*[@id=\"entityRecordDiv" + str(j) + "\"]/div[2]/div[8]/tyler-highlight/span"))).text
             address = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, "//*[@id=\"entityRecordDiv" + str(j) + "\"]/div[2]/div[11]/tyler-highlight/span"))).text
-
-
-
-            # permit_number = driver.find_element_by_xpath("//*[@id=\"entityRecord" + str(j) + "\"]/a/tyler-highlight/span").text
-            # applied_date = driver.find_element_by_xpath("//*[@id=\"entityRecordDiv" + str(j) + "\"]/div[2]/div[3]/span").text
-            # status = driver.find_element_by_xpath("//*[@id=\"entityRecordDiv" + str(j) + "\"]/div[2]/div[8]/tyler-highlight/span").text
-            # address = driver.find_element_by_xpath("//*[@id=\"entityRecordDiv" + str(j) + "\"]/div[2]/div[11]/tyler-highlight/span").text
-            
+ 
             permit_numbers.append(permit_number)
             applied_dates.append(applied_date)
             statuses.append(status)
@@ -492,12 +652,13 @@ def scrape_wake():
 # wake_df = scrape_wake()
 # wake_df.to_csv("data\\wake.csv")
 
-csv_df = scrape_csv()
-csv_df.to_csv("data\\csv.csv")
+# csv_df = scrape_csv()
+# csv_df.to_csv("data\\csv.csv")
+
+print(scrape_clark())
 
 # frames = [monroe_df, wake_df, csv_df]
 
-driver.quit()
 
 # final_frame = concat(frames)
 # print(final_frame)
