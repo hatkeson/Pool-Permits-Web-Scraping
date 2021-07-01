@@ -1,0 +1,236 @@
+---
+title: "Effect of COVID-19 on Pool Permit Applications"
+author: "Hagen Atkeson"
+date: "6/22/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+library(lubridate)
+library(magrittr)
+library(padr)
+library(tidyverse)
+library(readxl)
+library(knitr)
+library(here)
+library(zoo)
+library(scales)
+
+# import data
+csv <- read_csv("data/csv.csv")
+monroe <- read_csv("data/monroe.csv")
+clark <- read_csv("data/clark.csv")
+maricopa <- read_csv("data/maricopa.csv")
+wake <- read_csv("data/wake.csv")
+orange <- read_xlsx("data/orange.xlsx")
+
+# trim data
+trimmed_orange <- orange %>% 
+  rename(`Permit Number` = `Permits with Contacts Report`,
+         Status = ...3,
+         `Contact Name` = ...4,
+         `Permit Type` = ...9,
+         Date = ...7) %>% 
+  select(Date, `Permit Number`, `Permit Type`, Status) %>% 
+  slice(11:(n() - 3)) %>% 
+  mutate(Date = mdy(Date)) %>% 
+  add_column(County = "orange",
+             State = "CA") %>% 
+  distinct()
+trimmed_csv <- csv %>% 
+  select(Date, `Permit Number`, `Permit Type`, Status, County, State)
+trimmed_monroe <- monroe %>% 
+  select(Date, `Permit Number`, Type, Status, County, State) %>% 
+  rename(`Permit Type` = Type)
+trimmed_wake <- wake %>% 
+  select(Date, `Permit Number`, `Permit Type`, Status, County, State)
+trimmed_maricopa <- maricopa %>% 
+  select(Date, `Permit Number`, `Permit Type`, Status, County, State)
+trimmed_clark <- clark %>% 
+  select(Date, `Permit Number`, `Permit Type`, Status, County, State)
+
+# combine data
+full <- rbind(trimmed_csv, 
+              trimmed_monroe, 
+              trimmed_wake,
+              trimmed_maricopa,
+              trimmed_clark,
+              trimmed_orange)
+
+# get interval from Jan 2019 to May 2021
+permits_2019_2021 <- full %>% 
+  filter(year(Date) >= 2019 & Date <= as.Date("2021-05-31"))
+
+# get counts for each day
+day_counts <- permits_2019_2021 %>% 
+  group_by(Date) %>% 
+  summarize(count = n()) %>% 
+  pad %>% 
+  fill_by_value(count) %>% 
+  mutate(after_lockdown = case_when(Date >= as.Date("2020-05-01") &
+                                      Date <= as.Date("2021-05-31") ~ TRUE,
+                                    Date <= as.Date("2020-03-31") &
+                                      Date >= as.Date("2019-03-01") ~ FALSE)) %>% 
+  filter(!is.na(after_lockdown))
+
+# get sample rates
+sample_summary <- day_counts %>% 
+  group_by(after_lockdown) %>%
+  rename(`After Lockdown` = after_lockdown) %>% 
+  summarize(`Total Applications` = sum(count),
+            `Average Applications Per Day` = mean(count),
+            `Number of Days` = n()) %>% 
+  arrange(desc(`After Lockdown`))
+
+# get Poisson rate ratio
+test_results <- poisson.test(sample_summary$`Total Applications`,
+                             sample_summary$`Number of Days`, 
+                             alternative = "greater")
+
+
+# 2020 Pool permit applications indexed to 2018
+# get 2018 and 2020
+permits_2018_and_2020 <- full %>% 
+  filter(year(Date) >= 2018 & year(Date) <= 2020)
+
+day_counts_april_incl <- permits_2018_and_2020 %>% 
+  group_by(Date) %>% 
+  summarize(count = n()) %>% 
+  pad %>% 
+  fill_by_value(count)
+
+# get rolling averages
+day_counts_2018 <- day_counts_april_incl %>% 
+  filter(year(Date) == 2018) %>% 
+  mutate(rolling_avg = rollmean(count, k = 7, fill = NA), 
+         Date = as.POSIXct(Date))
+day_counts_2020 <- day_counts_april_incl %>% 
+  filter(year(Date) == 2020) %>% 
+  mutate(rolling_avg = rollmean(count, k = 7, fill = NA), 
+         Date = as.POSIXct(Date))
+
+# get ratio
+day_counts_2020 %<>% 
+  mutate(ratio = rolling_avg / day_counts_2018$rolling_avg)
+
+# compare 2018 to 2020
+sample_summary_2 <- day_counts_2018 %>% 
+  full_join(day_counts_2020) %>%
+  filter(year(Date) != 2019) %>% 
+  group_by(year(Date)) %>%
+  summarize(`Total Applications` = sum(count),
+            `Average Applications Per Day` = mean(count),
+            `Number of Days` = n()) %>% 
+  rename(Year = `year(Date)`)
+
+test_results_2 <- poisson.test(rev(sample_summary_2$`Total Applications`),
+                             rev(sample_summary_2$`Number of Days`), 
+                             alternative = "greater")
+```
+
+
+## Abstract
+
+The preventative measures taken to stop the spread of COVID-19 has necessitated the general population's sequestration in their own homes. This study seeks to answer whether the societal changes brought about by the COVID pandemic are associated with an increase in applications for pool permits, working under the hypothesis that more resources will be spent on home improvement if a greater portion of time is spent there. This analysis is accomplished by comparing the application rate of the 13 months leading up to the pandemic to that of the 13 months after it started. We shall show that between these two intervals, there is an estimated increase of **`r (round(unname(unlist(test_results["estimate"])[1]), 3) - 1)*100`%** in pool permit applications. We are 95% confident that the increase for the entire United States is at least **`r (round(unname(unlist(test_results["conf.int"])[1]), 3) - 1)*100`%**. This study also compares the application rates of 2018 to 2020, finding an estimated increase of **`r (round(unname(unlist(test_results_2["estimate"])[1]), 3) - 1)*100`%**.  We are 95% confident that 2020's application rate is at least **`r (round(unname(unlist(test_results_2["conf.int"])[1]), 3) - 1)*100`%** greater than that of 2018 for the entire United States.
+
+
+## Data
+
+The data have been scraped from the websites of eleven United States counties from January 2019 to May 2021, for a total of `r nrow(permits_2019_2021)` applications.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+permits_2019_2021 %>% 
+  group_by(County, State) %>% 
+  summarize(Count = n()) %>% 
+  kable()
+```
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+# bar plot of monthly applications
+permits_2019_2021 %>% 
+mutate(month = month(Date, label = TRUE),
+       month = as.factor(month),
+       year = as.factor(year(Date))) %>% 
+  ggplot(aes(x = month)) +
+  geom_bar(fill = "cornflowerblue") +
+  facet_grid(cols = vars(year)) +
+  theme_light() +
+  theme(text = element_text(color = "#554640"),
+        axis.text.x = element_text(angle = 90,
+                                   vjust = 0.3),
+        strip.background = element_rect(fill = "#554640")) +
+  labs(y = "Pool Permit Applications",
+       x = "Month",
+       title = "Pool Permit Applications by Month",
+       caption = "Data gathered on June 16th, 2021")
+
+# line plot of 7-day rolling average
+day_counts %>% 
+  mutate(rolling_avg = rollmean(count, k = 7, fill = NA), 
+         Date = as.POSIXct(Date)) %>% 
+  ggplot(aes(x = Date, y = rolling_avg)) +
+  geom_line(color = "cornflowerblue") +
+  theme_light() +
+  theme(text = element_text(color = "#554640")) +
+  labs(title = "Seven-Day Rolling Averages of Pool Permit Applications",
+       y = "Seven-Day Rolling Average") +
+  scale_x_datetime(labels = date_format("%b\n%Y"),
+                   date_breaks = "2 months")
+
+# Plot indexing to 2019
+day_counts_2020 %>% 
+  ggplot(aes(x = Date, y = ratio)) +
+  geom_line() +
+  labs(y = "As a Percent of 2018",
+       title = "2020 Pool Permit Applications Indexed to 2018",
+       caption = "Using the above seven-day rolling average") +
+  geom_line(color = "cornflowerblue") +
+  theme_light() +
+  theme(text = element_text(color = "#554640")) +
+  scale_y_continuous(labels = scales::percent)
+
+```
+
+
+## Analysis - Before vs. After Lockdown
+
+When looking at the number of permit applications per month, there seems to be a definite increase after the onset of the pandemic. For the purpose of analysis, we will disregard April 2020, as the sharp drop in permit applications at this time could be attributed to the general panic shifting the public's focus away from luxuries such as swimming pools.
+
+We shall then examine two intervals of 13 months each: March 2019 to March 2020, and May 2020 to May 2021. 
+
+To ascertain whether there has been an increase in application rate from the first to the second interval, a 95% confidence interval for the Poisson rate ratio shall suffice.
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+sample_summary %>%
+  mutate(across(where(is.double), round, 2)) %>% 
+  arrange(`After Lockdown`) %>% 
+  kable()
+```
+
+## Raw Test Output - Before vs. After Lockdown
+```{r echo = FALSE}
+test_results 
+```
+
+## Analysis - 2018 vs. 2020
+
+To gain a more complete picture, we shall use the same process to compare 2018 to 2020. 
+
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+sample_summary_2 %>%
+  mutate(across(where(is.double), round, 2)) %>% 
+  kable()
+```
+
+## Raw Test Output - 2018 vs. 2020
+```{r echo = FALSE}
+test_results_2
+```
+
+## Conclusion
+
+From the sample data, we estimate that the rate ratio comparing after and before the pandemic is `r round(unname(unlist(test_results["estimate"])), 3)`, meaning a **`r (round(unname(unlist(test_results["estimate"])[1]), 3) - 1)*100`%** increase in applications. Furthermore, we can say with 95% certainty that the true rate ratio in pool permit applications for the entire United States is at minimum `r round(unname(unlist(test_results["conf.int"])[1]), 3)`, meaning a **`r (round(unname(unlist(test_results["conf.int"])[1]), 3) - 1)*100`%** increase.
+
+When we compare the average pool permit application rate of 2020 to 2018, we estimate from the sample that the rate ratio between 2020 and 2018 is `r round(unname(unlist(test_results_2["estimate"])), 3)`, meaning a **`r (round(unname(unlist(test_results_2["estimate"])[1]), 3) - 1)*100`%** increase. We are 95% certain that the true rate ratio between the two years for the entire United States is at least `r round(unname(unlist(test_results_2["conf.int"])[1]), 3)`, meaning a **`r (round(unname(unlist(test_results_2["conf.int"])[1]), 3) - 1)*100`%** increase.

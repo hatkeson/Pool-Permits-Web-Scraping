@@ -2,6 +2,8 @@ from typing import Text
 import numpy as np
 from datetime import timedelta
 import os
+from os import path
+import datetime
 import glob
 import pandas
 import time
@@ -19,7 +21,6 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.common.exceptions import TimeoutException
-
 
 import logging
 from watchdog.observers import Observer
@@ -141,6 +142,7 @@ def scrape_csv():
             if (counties[i] == 'san_mateo'):
                 os.replace(latest_file, cwd + '\\data\\csv_files\\'+ counties[i] + '\\san_mateo.csv')
             else:
+                time.sleep(1)
                 if '/' in types[i][j]:
                     types[i][j] = types[i][j].replace('/', ' ')
                 os.replace(latest_file, cwd + '\\data\\csv_files\\'+ counties[i] + '\\' + types[i][j] + ".csv")
@@ -199,6 +201,25 @@ def scrape_monroe():
     permit_type = Select(driver.find_element_by_id("permit_type"))
     permit_type.select_by_visible_text("POOL & SPA")
 
+    # if a file already exists, scrape using the day after the last entry
+    file_exists = path.exists("data\\monroe.csv")
+    if (file_exists):
+        print("Monroe file exists: " + str(file_exists))
+        # open the csv file and find the most recent date
+        existing_file = pandas.read_csv("data//monroe.csv")
+        existing_file['Date'] = pandas.to_datetime(existing_file['Date'])
+        most_recent_date = existing_file['Date'].max()
+        # input the day after that date into the start date for the search
+        most_recent_date += datetime.timedelta(days=1)
+        most_recent_date = most_recent_date.strftime("%m%d%Y")
+        print("Most recent date: " + most_recent_date)
+        date_from = driver.find_element_by_id("from")
+        date_from.send_keys(most_recent_date)
+        # must also set end date as today
+        current_date = pandas.datetime.now().strftime("%m%d%Y")
+        date_to = driver.find_element_by_id("to")
+        date_to.send_keys(current_date)
+
     # status = Select(driver.find_element_by_id('status'))
     # status.select_by_visible_text('OPEN')
 
@@ -246,8 +267,16 @@ def scrape_monroe():
     while(next_enabled):
         next_button_link.click()
         page += 1
+        # wait for loading screen
+        loading = True
+        while(loading):
+            time.sleep(1)
+            try:
+                loading_screen = driver.find_element_by_id("overlayundefined")
+            except NoSuchElementException:
+                loading = False
         print("Scraping page " + str(page))
-        time.sleep(random.randint(3, 4))
+        # time.sleep(random.randint(3, 4))
         next_button_link = driver.find_element_by_link_text("Next")
         next_button = driver.find_element_by_id("permits-result_next") 
         next_enabled = "disabled" not in next_button.get_attribute("class")
@@ -287,6 +316,11 @@ def scrape_monroe():
     monroe_df['County'] = 'monroe'
     monroe_df['State'] = 'FL'
 
+    if (file_exists):
+        # append to existing file
+        frames = [existing_file, monroe_df]
+        monroe_df = concat(frames)
+
     return monroe_df
 
 def scrape_maricopa():
@@ -301,11 +335,29 @@ def scrape_maricopa():
 
     types = ["Commercial Pools and Spas", 
              "Expedited Models - Pools and Spas",
-             "Expedited Pools and Spas"]
-             # "Residential Pools and Spas"]
+             "Expedited Pools and Spas",
+             "Residential Pools and Spas"]
     
     start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
-    start_date.send_keys("01011990")
+
+    # if a file already exists, scrape using the day after the last entry
+    file_exists = path.exists("data\\maricopa.csv")
+    if (file_exists):
+        print("Maricopa file exists: " + str(file_exists))
+        # open the csv file and find the most recent date
+        existing_file = pandas.read_csv("data\\maricopa.csv")
+        existing_file['Date'] = pandas.to_datetime(existing_file['Date'])
+        most_recent_date = existing_file['Date'].max()
+        # input the day after that date into the start date for the search
+        most_recent_date += datetime.timedelta(days=1)
+        most_recent_date = most_recent_date.strftime("%m%d%Y")
+        print("Most recent date: " + most_recent_date)
+        start_date.send_keys(most_recent_date)
+        types = ["Residential Pools and Spas"]
+    else:
+        start_date.send_keys("01012010")
+    # Maricopa and Clark only get 2010 because of their slow loading times, 
+    # all others get 1990
 
     frames = []
 
@@ -346,7 +398,7 @@ def scrape_maricopa():
                 number_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblPermitNumber1').text
                 status_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblStatus').text
             except NoSuchElementException:
-                number_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblPermitNumber1').text
+                number_value = driver.find_element_by_id('ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl' + str(r).zfill(2) + '_lblPermitNumber').text
                 status_value = np.NaN
 
             number_list.append(number_value)          
@@ -390,7 +442,7 @@ def scrape_maricopa():
                 date_list.append(date_value)
                 status_list.append(status_value)
 
-        header_list = ["Date", "Permit Number" "Status"]
+        header_list = ["Date", "Permit Number", "Status"]
         value_list = [date_list, number_list, status_list]
         type_df = pandas.DataFrame(dict(zip(header_list, value_list)))
 
@@ -403,18 +455,41 @@ def scrape_maricopa():
     maricopa_df = pandas.concat(frames)
     maricopa_df['Date']= pandas.to_datetime(maricopa_df['Date'], format = '%m/%d/%Y', errors = 'coerce')
 
+    if (file_exists):
+        # append to existing file
+        frames = [existing_file, maricopa_df]
+        maricopa_df = concat(frames)
+
+
     return maricopa_df
 
 def scrape_clark():
     url = "https://citizenaccess.clarkcountynv.gov/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"
     driver.get(url)
     # 34,000 estimated results in Residential category
-    types = ["Residential Pools Spas Water Features",
-             "Commercial Spa",
-             "Commercial Pool"]
+    types = ["Commercial Spa",
+             "Commercial Pool",
+             "Residential Pools Spas Water Features"]
 
     start_date = driver.find_element_by_id("ctl00_PlaceHolderMain_generalSearchForm_txtGSStartDate")
-    start_date.send_keys("01011990")
+
+    file_exists = path.exists("data\\clark.csv")
+    if (file_exists):
+        print("Maricopa file exists: " + str(file_exists))
+        # open the csv file and find the most recent date
+        existing_file = pandas.read_csv("data\\clark.csv")
+        existing_file['Date'] = pandas.to_datetime(existing_file['Date'])
+        most_recent_date = existing_file['Date'].max()
+        # input the day after that date into the start date for the search
+        most_recent_date += datetime.timedelta(days=1)
+        most_recent_date = most_recent_date.strftime("%m%d%Y")
+        print("Most recent date: " + most_recent_date)
+        start_date.send_keys(most_recent_date)
+        types = ["Residential Pools Spas Water Features"]
+
+    else:
+        start_date.send_keys("01012010")
+    # clark and maricopa only get 2010, all others get 1990
 
     frames = []
 
@@ -459,7 +534,14 @@ def scrape_clark():
         status_list = []
 
         while(next_enabled):
-            next_button = WebDriverWait(driver, 10).until(
+            # get loading message, wait for it to go away
+            loading = driver.find_element_by_id("divGlobalLoading")
+            loading_style = loading.get_attribute("style")
+            while ("block" in loading_style):
+                time.sleep(1)
+                loading = driver.find_element_by_id("divGlobalLoading")
+                loading_style = loading.get_attribute("style")
+            next_button = WebDriverWait(driver, 3).until(
                 EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Next")))
             next_button.click()
             # get loading message, wait for it to go away
@@ -483,20 +565,25 @@ def scrape_clark():
             # scrape page    
             for r in range(2, count + 2):
                 print("Scraping row " + str(r))
-                date_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblUpdatedTime").text 
+
+                date_value = WebDriverWait(driver, 2).until(
+                    EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblUpdatedTime"))).text
                 try:
-                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber1").text
-                    status_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblStatus").text
-                except NoSuchElementException:
+                    number_value = WebDriverWait(driver, 2).until(
+                        EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber1"))).text
+                    status_value = WebDriverWait(driver, 2).until(
+                        EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblStatus"))).text
+                except TimeoutException:
                     # the ID starts with 21TMP, no status
-                    number_value = driver.find_element_by_id("ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber").text
+                    number_value = WebDriverWait(driver, 2).until(
+                        EC.element_to_be_clickable((By.ID, "ctl00_PlaceHolderMain_dgvPermitList_gdvPermitList_ctl" + str(r).zfill(2) + "_lblPermitNumber"))).text
                     status_value = np.NaN
                 
                 number_list.append(number_value)          
                 date_list.append(date_value)
                 status_list.append(status_value)
 
-        header_list = ["Date", "Permit Number" "Status"]
+        header_list = ["Date", "Permit Number", "Status"]
         value_list = [date_list, number_list, status_list]
         type_df = pandas.DataFrame(dict(zip(header_list, value_list)))
 
@@ -508,9 +595,15 @@ def scrape_clark():
 
     clark_df = pandas.concat(frames)
     clark_df['Date']= pandas.to_datetime(clark_df['Date'], format = '%m/%d/%Y', errors = 'coerce')
+
+    if (file_exists):
+        # append to existing file
+        frames = [existing_file, clark_df]
+        clark_df = concat(frames)
+
+
     return clark_df
             
-
 def scrape_wake():
     url = "https://energovcitizenaccess.tylertech.com/WakeCountyNC/SelfService#/search"
     driver.get(url)
@@ -530,7 +623,21 @@ def scrape_wake():
              "Public Pool Permit",
              "Residential Pool, Spa & Hot Tub"]
     date_from = driver.find_element_by_id("ApplyDateFrom")
-    date_from.send_keys("01/01/1990")
+    file_exists = path.exists("data\\clark.csv")
+    if (file_exists):
+        print("Maricopa file exists: " + str(file_exists))
+        # open the csv file and find the most recent date
+        existing_file = pandas.read_csv("data\\clark.csv")
+        existing_file['Date'] = pandas.to_datetime(existing_file['Date'])
+        most_recent_date = existing_file['Date'].max()
+        # input the day after that date into the start date for the search
+        most_recent_date += datetime.timedelta(days=1)
+        most_recent_date = most_recent_date.strftime("%m/%d/%Y")
+        print("Most recent date: " + most_recent_date)
+        date_from.send_keys(most_recent_date)
+        types = ["Residential Pool, Spa & Hot Tub"]
+    else:
+        date_from.send_keys("01/01/1990")
 
     frames = []
 
@@ -642,30 +749,48 @@ def scrape_wake():
 
     wake_df['Date']= pandas.to_datetime(wake_df['Date'], format = '%m/%d/%Y', errors = 'coerce')
 
+    if (file_exists):
+        # append to existing file
+        frames = [existing_file, wake_df]
+        wake_df = concat(frames)
 
     return wake_df
 
 
-# monroe_df = scrape_monroe()
-# monroe_df.to_csv("data\\monroe.csv")
+csv_df = scrape_csv()
+csv_df.to_csv("data\\csv.csv")
 
-# wake_df = scrape_wake()
-# wake_df.to_csv("data\\wake.csv")
+monroe_df = scrape_monroe()
+print("Monroe Final")
+print(monroe_df)
+monroe_df.to_csv("data\\monroe.csv")
 
-# csv_df = scrape_csv()
-# csv_df.to_csv("data\\csv.csv")
+wake_df = scrape_wake()
+print("Wake Final")
+print(wake_df)
+wake_df.to_csv("data\\wake.csv")
 
-print(scrape_clark())
+clark_df = scrape_clark()
+print("Clark Final")
+print(clark_df)
+clark_df.to_csv("data\\clark.csv")
 
-# frames = [monroe_df, wake_df, csv_df]
+maricopa_df = scrape_maricopa()
+print("Maricopa Final")
+print(maricopa_df)
+maricopa_df.to_csv("data\\maricopa.csv")
+
+frames = [clark_df, maricopa_df, monroe_df, wake_df, csv_df]
 
 
-# final_frame = concat(frames)
-# print(final_frame)
+final_frame = concat(frames)
+final_frame = final_frame[['Date', 'Permit Number', 'Permit Type', 'Status', 'County', 'State']]
+print(final_frame)
 
-# final_frame.to_excel("data\\pool_permits.xlsx")
-# final_frame.to_csv("data\\pool_permits.csv")
+final_frame.to_excel("data\\pool_permits.xlsx")
+final_frame.to_csv("data\\pool_permits.csv")
 
+driver.quit()
 total_toc = timedelta(seconds=time.perf_counter() - total_tic)
 
 print("Total time elapsed: " + str(total_toc))
